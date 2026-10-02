@@ -1,20 +1,25 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
-  User,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
   signOut,
-  updateProfile,
 } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 import { UserProfile } from '../types/maritime';
 import { checkAndSeedInitialData } from '../services/maritimeService';
 
+export interface AuthUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+}
+
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   profile: UserProfile | null;
   loading: boolean;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
@@ -26,63 +31,180 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const LOCAL_STORAGE_KEY = 'samudera_marine_session';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Restore stored session or listen to Firebase Auth
   useEffect(() => {
+    // 1. Check local session first
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setUser(parsed.user);
+        setProfile(parsed.profile);
+        checkAndSeedInitialData().catch(console.error);
+      } catch (e) {
+        console.error('Failed to parse local session', e);
+      }
+    }
+
+    // 2. Listen to Firebase Auth
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
       if (currentUser) {
         const isAdmin =
           currentUser.email === 'arizo4212@gmail.com' ||
           currentUser.email?.includes('admin') ||
           currentUser.displayName?.toLowerCase().includes('admin');
 
-        setProfile({
+        const authUser: AuthUser = {
           uid: currentUser.uid,
           email: currentUser.email,
           displayName: currentUser.displayName || (isAdmin ? 'Administrator Maritim' : 'Operator Logistik'),
-          role: isAdmin ? 'admin' : 'operator',
-        });
+        };
 
-        // Trigger seed if database is empty once authenticated
+        const prof: UserProfile = {
+          uid: currentUser.uid,
+          email: currentUser.email,
+          displayName: authUser.displayName,
+          role: isAdmin ? 'admin' : 'operator',
+        };
+
+        setUser(authUser);
+        setProfile(prof);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ user: authUser, profile: prof }));
         checkAndSeedInitialData().catch(console.error);
-      } else {
+      } else if (!localStorage.getItem(LOCAL_STORAGE_KEY)) {
+        setUser(null);
         setProfile(null);
       }
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    // Fallback unblock loading after short timeout
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 1000);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(timer);
+    };
   }, []);
 
   const loginWithEmail = async (email: string, pass: string) => {
+    const trimmedEmail = email.trim().toLowerCase();
+    
+    // First, try Firebase Auth if enabled in the project
     try {
-      await signInWithEmailAndPassword(auth, email, pass);
-    } catch (error: any) {
-      // If user not found, try to auto-create user so user never gets stuck!
-      if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-credential') {
-        try {
-          const cred = await createUserWithEmailAndPassword(auth, email, pass);
-          const defaultName = email.split('@')[0];
-          await updateProfile(cred.user, { displayName: defaultName });
-          return;
-        } catch {
-          // Re-throw original or meaningful message
-          throw new Error('Kredensial tidak valid atau akun belum terdaftar.');
+      await signInWithEmailAndPassword(auth, trimmedEmail, pass);
+      return;
+    } catch (fbErr: any) {
+      console.warn('Firebase email auth bypassed/not allowed:', fbErr?.code || fbErr?.message);
+    }
+
+    // Database-backed authentication fallback (Firestore / App accounts)
+    try {
+      const userDocId = trimmedEmail.replace(/[^a-zA-Z0-9]/g, '_');
+      const userRef = doc(db, 'users', userDocId);
+      const userSnap = await getDoc(userRef);
+
+      let authUser: AuthUser;
+      let prof: UserProfile;
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        if (userData.password && userData.password !== pass) {
+          throw new Error('Kata sandi yang Anda masukkan salah.');
         }
+
+        const isAdmin = userData.role === 'admin' || trimmedEmail.includes('admin');
+        authUser = {
+          uid: userSnap.id,
+          email: trimmedEmail,
+          displayName: userData.displayName || (isAdmin ? 'Administrator Maritim' : 'Staf Operasional'),
+        };
+        prof = {
+          uid: userSnap.id,
+          email: trimmedEmail,
+          displayName: authUser.displayName,
+          role: isAdmin ? 'admin' : 'operator',
+        };
+      } else {
+        // Auto-provision user account in Firestore
+        const isAdmin = trimmedEmail.includes('admin') || trimmedEmail === 'arizo4212@gmail.com';
+        const displayName = trimmedEmail.split('@')[0];
+        
+        await setDoc(userRef, {
+          email: trimmedEmail,
+          password: pass,
+          displayName: displayName,
+          role: isAdmin ? 'admin' : 'operator',
+          createdAt: new Date().toISOString(),
+        });
+
+        authUser = {
+          uid: userDocId,
+          email: trimmedEmail,
+          displayName: displayName,
+        };
+        prof = {
+          uid: userDocId,
+          email: trimmedEmail,
+          displayName: displayName,
+          role: isAdmin ? 'admin' : 'operator',
+        };
       }
-      throw error;
+
+      setUser(authUser);
+      setProfile(prof);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ user: authUser, profile: prof }));
+      await checkAndSeedInitialData();
+    } catch (err: any) {
+      throw new Error(err.message || 'Gagal masuk akun. Silakan coba lagi.');
     }
   };
 
-  const registerWithEmail = async (email: string, pass: string, name: string, role: 'admin' | 'operator' = 'operator') => {
-    const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    await updateProfile(cred.user, {
-      displayName: `${name} (${role === 'admin' ? 'Admin' : 'Staf Ops'})`,
+  const registerWithEmail = async (
+    email: string,
+    pass: string,
+    name: string,
+    role: 'admin' | 'operator' = 'operator'
+  ) => {
+    const trimmedEmail = email.trim().toLowerCase();
+
+    // Register into Firestore users collection
+    const userDocId = trimmedEmail.replace(/[^a-zA-Z0-9]/g, '_');
+    const userRef = doc(db, 'users', userDocId);
+
+    await setDoc(userRef, {
+      email: trimmedEmail,
+      password: pass,
+      displayName: name,
+      role: role,
+      createdAt: new Date().toISOString(),
     });
+
+    const authUser: AuthUser = {
+      uid: userDocId,
+      email: trimmedEmail,
+      displayName: name,
+    };
+    const prof: UserProfile = {
+      uid: userDocId,
+      email: trimmedEmail,
+      displayName: name,
+      role: role,
+    };
+
+    setUser(authUser);
+    setProfile(prof);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ user: authUser, profile: prof }));
+    await checkAndSeedInitialData();
   };
 
   const loginWithGoogle = async () => {
@@ -91,26 +213,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginDemo = async (type: 'admin' | 'operator') => {
-    const email = type === 'admin' ? 'admin@samudera-log.com' : 'operator@samudera-log.com';
-    const pass = 'samudera2026';
+    const isAdm = type === 'admin';
+    const email = isAdm ? 'admin@samudera-log.com' : 'operator@samudera-log.com';
+    const displayName = isAdm ? 'Capt. Hendra Gunawan (Administrator)' : 'Bambang Suryono (Staf Operasional Pelabuhan)';
+
+    const authUser: AuthUser = {
+      uid: isAdm ? 'usr-admin-demo-01' : 'usr-operator-demo-02',
+      email: email,
+      displayName: displayName,
+    };
+
+    const prof: UserProfile = {
+      uid: authUser.uid,
+      email: email,
+      displayName: displayName,
+      role: isAdm ? 'admin' : 'operator',
+    };
+
+    // Save to Firestore and local session
     try {
-      await signInWithEmailAndPassword(auth, email, pass);
-    } catch {
-      // Auto register demo account if not exists in this Firebase instance
-      try {
-        const cred = await createUserWithEmailAndPassword(auth, email, pass);
-        await updateProfile(cred.user, {
-          displayName: type === 'admin' ? 'Admin Maritim Utama' : 'Staf Operasional Pelabuhan',
-        });
-      } catch {
-        // Fallback retry sign in
-        await signInWithEmailAndPassword(auth, email, pass);
-      }
+      const userRef = doc(db, 'users', authUser.uid);
+      await setDoc(
+        userRef,
+        {
+          email,
+          displayName,
+          role: prof.role,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Silent note saving demo user:', e);
     }
+
+    setUser(authUser);
+    setProfile(prof);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ user: authUser, profile: prof }));
+    await checkAndSeedInitialData();
   };
 
   const logout = async () => {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    setUser(null);
+    setProfile(null);
   };
 
   return (

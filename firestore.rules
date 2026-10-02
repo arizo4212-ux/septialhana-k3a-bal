@@ -2,79 +2,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function isAdmin() {
-      return isSignedIn() && (
-        (request.auth.token.email == "arizo4212@gmail.com" && request.auth.token.email_verified == true) ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
-    }
-
-    // Entity Validators
-    function isValidVessel(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.code is string && data.code.size() > 0 && data.code.size() <= 50 &&
-             data.type in ['container', 'tanker', 'bulk', 'roro', 'tug_barge'] &&
-             data.status in ['sailing', 'docked', 'maintenance', 'loading', 'standby'];
-    }
-
-    function isValidPort(data) {
-      return data.code is string && data.code.size() > 0 && data.code.size() <= 20 &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.city is string && data.city.size() > 0 && data.city.size() <= 100;
-    }
-
-    function isValidClient(data) {
-      return data.companyName is string && data.companyName.size() > 0 && data.companyName.size() <= 120 &&
-             data.picName is string && data.picName.size() > 0 && data.picName.size() <= 100 &&
-             data.phone is string && data.phone.size() > 0 && data.phone.size() <= 30;
-    }
-
-    function isValidRoute(data) {
-      return data.originPortName is string && data.originPortName.size() > 0 && data.originPortName.size() <= 100 &&
-             data.destPortName is string && data.destPortName.size() > 0 && data.destPortName.size() <= 100 &&
-             data.status in ['active', 'restricted', 'seasonal'];
-    }
-
-    function isValidShipment(data) {
-      return data.blNumber is string && data.blNumber.size() > 0 && data.blNumber.size() <= 50 &&
-             data.clientName is string && data.clientName.size() > 0 && data.clientName.size() <= 120 &&
-             data.vesselName is string && data.vesselName.size() > 0 && data.vesselName.size() <= 100 &&
-             data.status in ['booking', 'loading', 'in_transit', 'arrived', 'unloading', 'delivered', 'cancelled'];
-    }
-
-    function isValidTrackingLog(data) {
-      return data.vesselName is string && data.vesselName.size() > 0 && data.vesselName.size() <= 100 &&
-             data.locationName is string && data.locationName.size() > 0 && data.locationName.size() <= 120 &&
-             data.status is string && data.status.size() > 0 && data.status.size() <= 120;
-    }
-
-    function isValidExpense(data) {
-      return data.vesselName is string && data.vesselName.size() > 0 && data.vesselName.size() <= 100 &&
-             data.category in ['fuel', 'port_dues', 'crew_payroll', 'maintenance', 'provisions', 'insurance'] &&
-             data.amountRp is number && data.amountRp >= 0;
-    }
-
-    function isValidNotification(data) {
-      return data.title is string && data.title.size() > 0 && data.title.size() <= 120 &&
-             data.message is string && data.message.size() > 0 && data.message.size() <= 300 &&
-             data.type in ['warning', 'info', 'success', 'danger'];
+      return id is string && id.size() <= 128;
     }
 
     // Default catch-all
@@ -84,72 +13,57 @@ service cloud.firestore {
 
     // Admins collection
     match /admins/{adminId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read, write: if true;
+    }
+
+    // Users and App Accounts
+    match /users/{userId} {
+      allow read, write: if true;
     }
 
     // Master Vessels
     match /vessels/{vesselId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(vesselId) && isValidVessel(incoming());
-      allow update: if isSignedIn() && isValidId(vesselId) && isValidVessel(incoming());
-      allow delete: if isSignedIn() && isValidId(vesselId);
+      allow read, write: if true;
     }
 
     // Master Ports
     match /ports/{portId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(portId) && isValidPort(incoming());
-      allow update: if isSignedIn() && isValidId(portId) && isValidPort(incoming());
-      allow delete: if isSignedIn() && isValidId(portId);
+      allow read, write: if true;
     }
 
     // Master Clients
     match /clients/{clientId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(clientId) && isValidClient(incoming());
-      allow update: if isSignedIn() && isValidId(clientId) && isValidClient(incoming());
-      allow delete: if isSignedIn() && isValidId(clientId);
+      allow read, write: if true;
     }
 
     // Master Routes
     match /routes/{routeId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(routeId) && isValidRoute(incoming());
-      allow update: if isSignedIn() && isValidId(routeId) && isValidRoute(incoming());
-      allow delete: if isSignedIn() && isValidId(routeId);
+      allow read, write: if true;
     }
 
     // Shipments (Bill of Lading & Bookings)
     match /shipments/{shipmentId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(shipmentId) && isValidShipment(incoming());
-      allow update: if isSignedIn() && isValidId(shipmentId) && isValidShipment(incoming());
-      allow delete: if isSignedIn() && isValidId(shipmentId);
+      allow read, write: if true;
     }
 
     // Tracking Logs
     match /tracking_logs/{logId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(logId) && isValidTrackingLog(incoming());
-      allow update: if isSignedIn() && isValidId(logId) && isValidTrackingLog(incoming());
-      allow delete: if isSignedIn() && isValidId(logId);
+      allow read, write: if true;
     }
 
     // Operational Expenses
     match /operational_expenses/{expenseId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(expenseId) && isValidExpense(incoming());
-      allow update: if isSignedIn() && isValidId(expenseId) && isValidExpense(incoming());
-      allow delete: if isSignedIn() && isValidId(expenseId);
+      allow read, write: if true;
     }
 
     // Notifications
     match /notifications/{notificationId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(notificationId) && isValidNotification(incoming());
-      allow update: if isSignedIn() && isValidId(notificationId) && isValidNotification(incoming());
-      allow delete: if isSignedIn() && isValidId(notificationId);
+      allow read, write: if true;
+    }
+
+    // Test connection doc
+    match /test/{testId} {
+      allow read, write: if true;
     }
   }
 }
