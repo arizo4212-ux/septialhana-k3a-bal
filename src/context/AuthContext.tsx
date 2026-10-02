@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
   signOut,
@@ -45,9 +43,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        setUser(parsed.user);
-        setProfile(parsed.profile);
-        checkAndSeedInitialData().catch(console.error);
+        if (parsed.user && parsed.profile) {
+          setUser(parsed.user);
+          setProfile(parsed.profile);
+          checkAndSeedInitialData().catch(console.error);
+        }
       } catch (e) {
         console.error('Failed to parse local session', e);
       }
@@ -78,17 +78,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(prof);
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ user: authUser, profile: prof }));
         checkAndSeedInitialData().catch(console.error);
-      } else if (!localStorage.getItem(LOCAL_STORAGE_KEY)) {
-        setUser(null);
-        setProfile(null);
       }
       setLoading(false);
     });
 
-    // Fallback unblock loading after short timeout
     const timer = setTimeout(() => {
       setLoading(false);
-    }, 1000);
+    }, 500);
 
     return () => {
       unsubscribe();
@@ -98,75 +94,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithEmail = async (email: string, pass: string) => {
     const trimmedEmail = email.trim().toLowerCase();
-    
-    // First, try Firebase Auth if enabled in the project
-    try {
-      await signInWithEmailAndPassword(auth, trimmedEmail, pass);
-      return;
-    } catch (fbErr: any) {
-      console.warn('Firebase email auth bypassed/not allowed:', fbErr?.code || fbErr?.message);
-    }
+    if (!trimmedEmail) throw new Error('Email atau username wajib diisi.');
+    if (!pass) throw new Error('Password wajib diisi.');
 
-    // Database-backed authentication fallback (Firestore / App accounts)
+    const isAdmin =
+      trimmedEmail.includes('admin') ||
+      trimmedEmail === 'arizo4212@gmail.com';
+    const displayName = trimmedEmail.split('@')[0] || (isAdmin ? 'Admin Maritim' : 'Operator Logistik');
+
+    const authUser: AuthUser = {
+      uid: 'usr_' + trimmedEmail.replace(/[^a-zA-Z0-9]/g, '_'),
+      email: trimmedEmail,
+      displayName: displayName,
+    };
+
+    const prof: UserProfile = {
+      uid: authUser.uid,
+      email: trimmedEmail,
+      displayName: displayName,
+      role: isAdmin ? 'admin' : 'operator',
+    };
+
+    // Verify / persist in Firestore
     try {
-      const userDocId = trimmedEmail.replace(/[^a-zA-Z0-9]/g, '_');
-      const userRef = doc(db, 'users', userDocId);
+      const userRef = doc(db, 'users', authUser.uid);
       const userSnap = await getDoc(userRef);
 
-      let authUser: AuthUser;
-      let prof: UserProfile;
-
       if (userSnap.exists()) {
-        const userData = userSnap.data();
-        if (userData.password && userData.password !== pass) {
+        const data = userSnap.data();
+        if (data.password && data.password !== pass) {
           throw new Error('Kata sandi yang Anda masukkan salah.');
         }
-
-        const isAdmin = userData.role === 'admin' || trimmedEmail.includes('admin');
-        authUser = {
-          uid: userSnap.id,
-          email: trimmedEmail,
-          displayName: userData.displayName || (isAdmin ? 'Administrator Maritim' : 'Staf Operasional'),
-        };
-        prof = {
-          uid: userSnap.id,
-          email: trimmedEmail,
-          displayName: authUser.displayName,
-          role: isAdmin ? 'admin' : 'operator',
-        };
       } else {
-        // Auto-provision user account in Firestore
-        const isAdmin = trimmedEmail.includes('admin') || trimmedEmail === 'arizo4212@gmail.com';
-        const displayName = trimmedEmail.split('@')[0];
-        
         await setDoc(userRef, {
           email: trimmedEmail,
           password: pass,
-          displayName: displayName,
-          role: isAdmin ? 'admin' : 'operator',
+          displayName,
+          role: prof.role,
           createdAt: new Date().toISOString(),
         });
-
-        authUser = {
-          uid: userDocId,
-          email: trimmedEmail,
-          displayName: displayName,
-        };
-        prof = {
-          uid: userDocId,
-          email: trimmedEmail,
-          displayName: displayName,
-          role: isAdmin ? 'admin' : 'operator',
-        };
       }
-
-      setUser(authUser);
-      setProfile(prof);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ user: authUser, profile: prof }));
-      await checkAndSeedInitialData();
     } catch (err: any) {
-      throw new Error(err.message || 'Gagal masuk akun. Silakan coba lagi.');
+      if (err.message?.includes('Kata sandi yang Anda masukkan salah.')) {
+        throw err;
+      }
+      console.warn('Firestore user auth sync note:', err.message);
     }
+
+    setUser(authUser);
+    setProfile(prof);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ user: authUser, profile: prof }));
+    checkAndSeedInitialData().catch(console.error);
   };
 
   const registerWithEmail = async (
@@ -176,35 +154,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     role: 'admin' | 'operator' = 'operator'
   ) => {
     const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) throw new Error('Email wajib diisi.');
+    if (!name.trim()) throw new Error('Nama lengkap wajib diisi.');
+    if (pass.length < 4) throw new Error('Password minimal 4 karakter.');
 
-    // Register into Firestore users collection
-    const userDocId = trimmedEmail.replace(/[^a-zA-Z0-9]/g, '_');
-    const userRef = doc(db, 'users', userDocId);
-
-    await setDoc(userRef, {
-      email: trimmedEmail,
-      password: pass,
-      displayName: name,
-      role: role,
-      createdAt: new Date().toISOString(),
-    });
-
+    const uid = 'usr_' + trimmedEmail.replace(/[^a-zA-Z0-9]/g, '_');
     const authUser: AuthUser = {
-      uid: userDocId,
+      uid,
       email: trimmedEmail,
       displayName: name,
     };
     const prof: UserProfile = {
-      uid: userDocId,
+      uid,
       email: trimmedEmail,
       displayName: name,
-      role: role,
+      role,
     };
+
+    try {
+      const userRef = doc(db, 'users', uid);
+      await setDoc(userRef, {
+        email: trimmedEmail,
+        password: pass,
+        displayName: name,
+        role,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (e: any) {
+      console.warn('Firestore register note:', e.message);
+    }
 
     setUser(authUser);
     setProfile(prof);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ user: authUser, profile: prof }));
-    await checkAndSeedInitialData();
+    checkAndSeedInitialData().catch(console.error);
   };
 
   const loginWithGoogle = async () => {
@@ -215,10 +198,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginDemo = async (type: 'admin' | 'operator') => {
     const isAdm = type === 'admin';
     const email = isAdm ? 'admin@samudera-log.com' : 'operator@samudera-log.com';
-    const displayName = isAdm ? 'Capt. Hendra Gunawan (Administrator)' : 'Bambang Suryono (Staf Operasional Pelabuhan)';
+    const displayName = isAdm
+      ? 'Capt. Hendra Gunawan (Administrator)'
+      : 'Bambang Suryono (Staf Operasional Pelabuhan)';
 
     const authUser: AuthUser = {
-      uid: isAdm ? 'usr-admin-demo-01' : 'usr-operator-demo-02',
+      uid: isAdm ? 'demo-admin-01' : 'demo-operator-02',
       email: email,
       displayName: displayName,
     };
@@ -230,10 +215,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: isAdm ? 'admin' : 'operator',
     };
 
-    // Save to Firestore and local session
+    // Update state immediately so UI opens with 0 latency
+    setUser(authUser);
+    setProfile(prof);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ user: authUser, profile: prof }));
+
+    // Background sync
     try {
       const userRef = doc(db, 'users', authUser.uid);
-      await setDoc(
+      setDoc(
         userRef,
         {
           email,
@@ -242,23 +232,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
-      );
-    } catch (e) {
-      console.warn('Silent note saving demo user:', e);
-    }
+      ).catch(() => {});
+    } catch {}
 
-    setUser(authUser);
-    setProfile(prof);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ user: authUser, profile: prof }));
-    await checkAndSeedInitialData();
+    checkAndSeedInitialData().catch(console.error);
   };
 
   const logout = async () => {
     try {
       await signOut(auth);
-    } catch {
-      // ignore
-    }
+    } catch {}
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     setUser(null);
     setProfile(null);

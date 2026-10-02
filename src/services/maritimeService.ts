@@ -42,7 +42,11 @@ export function subscribeVessels(
     },
     (err) => {
       onError?.(err);
-      handleFirestoreError(err, OperationType.GET, path);
+      try {
+        handleFirestoreError(err, OperationType.GET, path);
+      } catch (e) {
+        console.warn('Vessels subscription listener note:', e);
+      }
     }
   );
 }
@@ -64,7 +68,11 @@ export function subscribePorts(
     },
     (err) => {
       onError?.(err);
-      handleFirestoreError(err, OperationType.GET, path);
+      try {
+        handleFirestoreError(err, OperationType.GET, path);
+      } catch (e) {
+        console.warn('Ports subscription listener note:', e);
+      }
     }
   );
 }
@@ -86,7 +94,11 @@ export function subscribeClients(
     },
     (err) => {
       onError?.(err);
-      handleFirestoreError(err, OperationType.GET, path);
+      try {
+        handleFirestoreError(err, OperationType.GET, path);
+      } catch (e) {
+        console.warn('Clients subscription listener note:', e);
+      }
     }
   );
 }
@@ -108,7 +120,11 @@ export function subscribeRoutes(
     },
     (err) => {
       onError?.(err);
-      handleFirestoreError(err, OperationType.GET, path);
+      try {
+        handleFirestoreError(err, OperationType.GET, path);
+      } catch (e) {
+        console.warn('Routes subscription listener note:', e);
+      }
     }
   );
 }
@@ -130,7 +146,11 @@ export function subscribeShipments(
     },
     (err) => {
       onError?.(err);
-      handleFirestoreError(err, OperationType.GET, path);
+      try {
+        handleFirestoreError(err, OperationType.GET, path);
+      } catch (e) {
+        console.warn('Shipments subscription listener note:', e);
+      }
     }
   );
 }
@@ -154,7 +174,11 @@ export function subscribeTrackingLogs(
     },
     (err) => {
       onError?.(err);
-      handleFirestoreError(err, OperationType.GET, path);
+      try {
+        handleFirestoreError(err, OperationType.GET, path);
+      } catch (e) {
+        console.warn('Tracking logs subscription listener note:', e);
+      }
     }
   );
 }
@@ -176,7 +200,11 @@ export function subscribeExpenses(
     },
     (err) => {
       onError?.(err);
-      handleFirestoreError(err, OperationType.GET, path);
+      try {
+        handleFirestoreError(err, OperationType.GET, path);
+      } catch (e) {
+        console.warn('Expenses subscription listener note:', e);
+      }
     }
   );
 }
@@ -199,7 +227,11 @@ export function subscribeNotifications(
     },
     (err) => {
       onError?.(err);
-      handleFirestoreError(err, OperationType.GET, path);
+      try {
+        handleFirestoreError(err, OperationType.GET, path);
+      } catch (e) {
+        console.warn('Notifications subscription listener note:', e);
+      }
     }
   );
 }
