@@ -1,0 +1,197 @@
+{
+  "entities": {
+    "Vessel": {
+      "title": "Vessel",
+      "description": "Master data kapal armada laut",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "code": { "type": "string", "maxLength": 50 },
+        "type": { "type": "string", "enum": ["container", "tanker", "bulk", "roro", "tug_barge"] },
+        "capacityDwt": { "type": "number" },
+        "capacityTeu": { "type": "number" },
+        "builtYear": { "type": "number" },
+        "status": { "type": "string", "enum": ["sailing", "docked", "maintenance", "loading", "standby"] },
+        "homeport": { "type": "string", "maxLength": 100 },
+        "currentPort": { "type": "string", "maxLength": 100 },
+        "currentLat": { "type": "number" },
+        "currentLng": { "type": "number" },
+        "heading": { "type": "number" },
+        "speedKnots": { "type": "number" },
+        "captainName": { "type": "string", "maxLength": 100 },
+        "crewCount": { "type": "number" },
+        "fuelLevelPercent": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "code", "type", "status"]
+    },
+    "Port": {
+      "title": "Port",
+      "description": "Master data pelabuhan laut",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "maxLength": 20 },
+        "name": { "type": "string", "maxLength": 100 },
+        "city": { "type": "string", "maxLength": 100 },
+        "province": { "type": "string", "maxLength": 100 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "activeDocks": { "type": "number" },
+        "capacityTeu": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["code", "name", "city"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Master data shipper atau pelanggan ekspedisi maritim",
+      "type": "object",
+      "properties": {
+        "companyName": { "type": "string", "maxLength": 120 },
+        "picName": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 100 },
+        "address": { "type": "string", "maxLength": 255 },
+        "industry": { "type": "string", "maxLength": 100 },
+        "contractType": { "type": "string", "enum": ["kontrak_tahunan", "spot_charter", "voyage_charter"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["companyName", "picName", "phone"]
+    },
+    "Route": {
+      "title": "Route",
+      "description": "Master data rute pelayaran dan tarif kargo",
+      "type": "object",
+      "properties": {
+        "originPortId": { "type": "string", "maxLength": 100 },
+        "originPortName": { "type": "string", "maxLength": 100 },
+        "destPortId": { "type": "string", "maxLength": 100 },
+        "destPortName": { "type": "string", "maxLength": 100 },
+        "distanceNauticalMiles": { "type": "number" },
+        "estDays": { "type": "number" },
+        "tariffPerTeu": { "type": "number" },
+        "tariffPerTon": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "restricted", "seasonal"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["originPortName", "destPortName", "distanceNauticalMiles", "status"]
+    },
+    "Shipment": {
+      "title": "Shipment",
+      "description": "Transaksi data pengiriman kargo dan bill of lading",
+      "type": "object",
+      "properties": {
+        "blNumber": { "type": "string", "maxLength": 50 },
+        "clientId": { "type": "string", "maxLength": 100 },
+        "clientName": { "type": "string", "maxLength": 120 },
+        "vesselId": { "type": "string", "maxLength": 100 },
+        "vesselName": { "type": "string", "maxLength": 100 },
+        "routeId": { "type": "string", "maxLength": 100 },
+        "originPort": { "type": "string", "maxLength": 100 },
+        "destinationPort": { "type": "string", "maxLength": 100 },
+        "cargoType": { "type": "string", "maxLength": 100 },
+        "cargoWeightTon": { "type": "number" },
+        "cargoVolumeTeu": { "type": "number" },
+        "freightChargeRp": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "dp_paid", "paid"] },
+        "status": { "type": "string", "enum": ["booking", "loading", "in_transit", "arrived", "unloading", "delivered", "cancelled"] },
+        "departureDate": { "type": "string", "maxLength": 30 },
+        "etaDate": { "type": "string", "maxLength": 30 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["blNumber", "clientName", "vesselName", "originPort", "destinationPort", "status"]
+    },
+    "TrackingLog": {
+      "title": "TrackingLog",
+      "description": "Histori pelacakan posisi dan peristiwa pelayaran kapal",
+      "type": "object",
+      "properties": {
+        "shipmentId": { "type": "string", "maxLength": 100 },
+        "vesselId": { "type": "string", "maxLength": 100 },
+        "vesselName": { "type": "string", "maxLength": 100 },
+        "timestamp": { "type": "string", "maxLength": 50 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "locationName": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "maxLength": 120 },
+        "speedKnots": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "reportedBy": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["vesselName", "locationName", "status", "timestamp"]
+    },
+    "OperationalExpense": {
+      "title": "OperationalExpense",
+      "description": "Transaksi data pengeluaran operasional kapal laut",
+      "type": "object",
+      "properties": {
+        "vesselId": { "type": "string", "maxLength": 100 },
+        "vesselName": { "type": "string", "maxLength": 100 },
+        "shipmentId": { "type": "string", "maxLength": 100 },
+        "expenseDate": { "type": "string", "maxLength": 30 },
+        "category": { "type": "string", "enum": ["fuel", "port_dues", "crew_payroll", "maintenance", "provisions", "insurance"] },
+        "description": { "type": "string", "maxLength": 200 },
+        "amountRp": { "type": "number" },
+        "receiptRef": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["vesselName", "category", "description", "amountRp", "expenseDate"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "Notifikasi otomatis sistem operasional maritim",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 120 },
+        "message": { "type": "string", "maxLength": 300 },
+        "type": { "type": "string", "enum": ["warning", "info", "success", "danger"] },
+        "category": { "type": "string", "enum": ["weather", "docking", "cargo", "system"] },
+        "timestamp": { "type": "string", "maxLength": 50 },
+        "isRead": { "type": "boolean" },
+        "relatedId": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "message", "type"]
+    }
+  },
+  "firestore": {
+    "/vessels/{vesselId}": {
+      "schema": "Vessel",
+      "description": "Koleksi data master armada kapal laut"
+    },
+    "/ports/{portId}": {
+      "schema": "Port",
+      "description": "Koleksi data master pelabuhan laut"
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Koleksi data master shipper dan pelanggan"
+    },
+    "/routes/{routeId}": {
+      "schema": "Route",
+      "description": "Koleksi data master rute dan tarif laut"
+    },
+    "/shipments/{shipmentId}": {
+      "schema": "Shipment",
+      "description": "Koleksi transaksi kargo booking dan bill of lading"
+    },
+    "/tracking_logs/{logId}": {
+      "schema": "TrackingLog",
+      "description": "Koleksi riwayat pelacakan posisi dan checkpoint armada"
+    },
+    "/operational_expenses/{expenseId}": {
+      "schema": "OperationalExpense",
+      "description": "Koleksi catatan pengeluaran biaya operasional pelayaran"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "AppNotification",
+      "description": "Koleksi notifikasi otomatis dan peringatan operasional"
+    }
+  }
+}

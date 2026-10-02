@@ -1,0 +1,6 @@
+{
+  "name": "Nusantara Marine Logistics - Sistem Bisnis Angkutan Laut Realtime",
+  "description": "Aplikasi manajemen operasional bisnis angkutan laut terintegrasi dengan pelacakan kapal real-time, master armada, manajemen bill of lading kargo, dan analitik performa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
